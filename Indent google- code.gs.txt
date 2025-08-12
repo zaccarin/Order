@@ -113,66 +113,103 @@ function isPhotoUploaded(poNumberRaw) {
  *  Main submission                                                      *
  * ===================================================================== */
 function submitIndent(form) {
+  // helpers
+  var tz = Session.getScriptTimeZone();
+  function trim(v){ return String(v == null ? '' : v).trim(); }
+  function parseDateOrThrow(label, raw){
+    var s = trim(raw);
+    if (!s) throw new Error(label + ' is required.');
+    var d = new Date(s);
+    if (isNaN(d) || d.getTime() === 0) {
+      throw new Error('Invalid ' + label + '. Please pick a date from the calendar.');
+    }
+    return d;
+  }
+
+  // ---- fast validations (no lock) ----
+  var poDateRaw     = trim(form.poDate);
+  var poNumberRaw   = trim(form.poNumber);
+  var client        = trim(form.client);
+  var supplier      = trim(form.supplier);
+  var targetDateRaw = trim(form.targetDate);
+  var stylesRaw     = trim(form.styles);
+
+  if (!poNumberRaw)   return { status:'error', message:'PO Number is required.' };
+  if (!client)        return { status:'error', message:'Client is required.' };
+  if (!supplier)      return { status:'error', message:'Supplier is required.' };
+  if (!poDateRaw)     return { status:'error', message:'PO Date is required.' };
+  if (!targetDateRaw) return { status:'error', message:'Target Date is required.' };
+  if (!stylesRaw)     return { status:'error', message:'At least one style/product is required.' };
+
+  // Ensure PO photo exists first
+  if (!isPhotoUploaded(poNumberRaw)) {
+    return { status:'error', message:'Upload the PO photo in the Google Form before submitting.' };
+  }
+
+  // Parse dates and format
+  var poDateObj     = parseDateOrThrow('PO Date',     poDateRaw);
+  var targetDateObj = parseDateOrThrow('Target Date', targetDateRaw);
+  var poDate        = Utilities.formatDate(poDateObj,     tz, 'dd/MM/yyyy');
+  var targetDate    = Utilities.formatDate(targetDateObj, tz, 'dd/MM/yyyy');
+  var timestamp     = Utilities.formatDate(new Date(),    tz, 'dd/MM/yyyy HH:mm:ss');
+
+  // Parse items payload
+  var styles;
+  try { styles = JSON.parse(stylesRaw); }
+  catch(e){ return { status:'error', message:'Invalid items payload.' }; }
+  if (!Array.isArray(styles) || !styles.length) {
+    return { status:'error', message:'At least one style/product is required.' };
+  }
+
+  var poNumberSheet = "'" + poNumberRaw; // force text in sheet
+
+  // ---- lock only for duplicate-check + write ----
   var lock = LockService.getUserLock();
   try {
-    lock.waitLock(30000);
+    lock.waitLock(60000);
 
     var ss    = SpreadsheetApp.getActiveSpreadsheet();
     var sheet = ss.getSheetByName(indentSheetName);
     if (!sheet) throw new Error("Sheet '" + indentSheetName + "' not found.");
 
-    // Basic header fields
-    var poDateRaw   = form.poDate;
-    var poNumberRaw = String(form.poNumber||'').trim();
-    if (!poNumberRaw) throw new Error('PO Number is blank.');
-
-    // Enforce photo uploaded
-    if (!isPhotoUploaded(poNumberRaw)) {
-      return {
-        status: 'error',
-        message: 'Upload the PO photo in the Google Form before submitting.'
-      };
-    }
-
-    var poNumberSheet = "'" + poNumberRaw;   // force text
-    var client        = form.client;
-    logNewClient(client);
-
-    var supplier      = form.supplier;
-    var targetDateRaw = form.targetDate;
-    var styles        = JSON.parse(form.styles);
-
-    var poDate      = Utilities.formatDate(new Date(poDateRaw),
-                          Session.getScriptTimeZone(), 'dd/MM/yyyy');
-    var targetDate  = Utilities.formatDate(new Date(targetDateRaw),
-                          Session.getScriptTimeZone(), 'dd/MM/yyyy');
-    var timestamp   = Utilities.formatDate(new Date(),
-                          Session.getScriptTimeZone(), 'dd/MM/yyyy HH:mm:ss');
-
-    // Build rows & duplicate check
     var rows = [];
     styles.forEach(function(s){
-      s.products.forEach(function(p){
-        if (isDuplicatePOStyleSKUMat(poNumberRaw, s.styleId,
-                                     p.productCode, p.materialName)) {
+      var styleId = trim(s.styleId);
+      (s.products || []).forEach(function(p){
+        var sku      = trim(p.productCode);
+        var material = trim(p.materialName);
+        var qty      = Number(trim(p.quantity));
+        var uom      = trim(p.uom);
+
+        if (!styleId || !sku || !material || !uom || !qty) {
+          throw new Error('Every row requires Style ID, SKU, Material, Quantity and UOM.');
+        }
+        if (isNaN(qty) || qty <= 0) {
+          throw new Error('Quantity must be a positive number for SKU "' + sku + '".');
+        }
+
+        // Duplicate guard: PO + Style + SKU + Material
+        if (isDuplicatePOStyleSKUMat(poNumberRaw, styleId, sku, material)) {
           throw new Error(
             'Duplicate blocked: PO "' + poNumberRaw +
-            '", Style "' + s.styleId +
-            '", SKU "' + p.productCode +
-            '", Material "' + p.materialName + '" already exists.'
+            '", Style "' + styleId +
+            '", SKU "' + sku +
+            '", Material "' + material + '" already exists.'
           );
         }
+
         rows.push([
-          poDate, poNumberSheet, s.styleId, client, supplier,
-          p.productCode, p.materialName,
-          p.quantity, p.uom, targetDate, '', timestamp
+          poDate, poNumberSheet, styleId, client, supplier,
+          sku, material,
+          qty, uom, targetDate, '', timestamp // J=Target Date, K(formula placeholder), L=timestamp
         ]);
       });
     });
 
-    // Write once
+    if (!rows.length) throw new Error('No product rows to submit.');
+
     var startRow = sheet.getLastRow() + 1;
-    sheet.getRange(startRow,1,rows.length,rows[0].length).setValues(rows);
+    sheet.getRange(startRow, 1, rows.length, rows[0].length).setValues(rows);
 
     logExecution('PO ' + poNumberRaw + ' submitted (' + rows.length + ' rows).');
     return { status:'success', message:'PO ' + poNumberRaw + ' submitted.' };
@@ -184,6 +221,7 @@ function submitIndent(form) {
     lock.releaseLock();
   }
 }
+
 
 /* ===================================================================== *
  *  Misc helpers (logging, temp-save, etc.)                              *
@@ -214,23 +252,48 @@ function logError(msg){
 /* ===================================================================== *
  *  Extend XLOOKUP, triggers, onOpen                                      *
  * ===================================================================== */
-function extendXLOOKUP(){
+/* =================================================================== *
+ *  Extend XLOOKUP column (photo URL)                                  *
+ * =================================================================== */
+function extendXLOOKUP() {
+
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var indentSheet = ss.getSheetByName(indentSheetName);
   var helperSheet = ss.getSheetByName(helperSheetName);
-  if(!indentSheet||!helperSheet) return;
-  var lastRow = indentSheet.getLastRow();
-  var lastProc = helperSheet.getRange('A1').getValue();
-  if(!lastProc||isNaN(lastProc)) lastProc=1;
-  if(lastRow>lastProc){
-    for(var i=lastProc+1;i<=lastRow;i++){
-      var po = indentSheet.getRange(i,2).getValue().toString().trim();
-      var formula = '=IFERROR(XLOOKUP("'+po+'",Form_Responses_1!B:B,Form_Responses_1!C:C,"No photo uploaded",0,-1),"No photo uploaded")';
-      indentSheet.getRange(i,11).setFormula(formula);
-    }
-    helperSheet.getRange('A1').setValue(lastRow);
+  if (!indentSheet || !helperSheet) return;
+
+  var lastRow  = indentSheet.getLastRow();
+  var lastDone = helperSheet.getRange('A1').getValue();
+  if (!lastDone || isNaN(lastDone)) lastDone = 1;
+  if (lastRow <= lastDone) return;                       // nothing new
+
+  var photoSheet = "'Form_responses_1'";                 // exact sheet name
+
+  for (var r = lastDone + 1; r <= lastRow; r++) {
+
+    // Column-B PO; build two keys
+    var rawPO   = indentSheet.getRange(r, 2).getValue();
+    var po      = String(rawPO).trim();          // as-is (may have leading ')
+    var poNoApo = po.replace(/^'/, '');          // apostrophe stripped
+
+    var formula =
+      '=IFERROR(' +
+          'XLOOKUP("' + po + '",'      + photoSheet + '!B:B,' +
+                                         photoSheet + '!C:C,"No photo uploaded",0,-1)' +
+      ',' +
+          'IFERROR(' +
+              'XLOOKUP("' + poNoApo + '",' + photoSheet + '!B:B,' +
+                                            photoSheet + '!C:C,"No photo uploaded",0,-1)' +
+          ',"No photo uploaded")' +
+      ')';
+
+    indentSheet.getRange(r, 11).setFormula(formula);    // column K
   }
+
+  helperSheet.getRange('A1').setValue(lastRow);
 }
+
+
 
 function onOpen(){
   extendXLOOKUP();
