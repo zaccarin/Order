@@ -1,99 +1,349 @@
-const folderId = '1ioy_uWVdBG8DP7jKF1krKe_HyORvbXVdf9xDVtggDyp9qxFCeOQWQX8yv2SrSO-PVTByFXPI';  // Google Drive Folder ID for photo uploads
-const indentSheetName = "Indent Details";
-const formResponseSheetName = "Form Responses 1";  // Default Form Response Sheet Name
+/* ===================================================================== *
+ *  Purchase-Order Web-App  |  Code.gs  |  2025-07-04                    *
+ * ===================================================================== */
 
-function doGet() {
-  return HtmlService.createHtmlOutputFromFile('Index');
+/* --- Sheet names ------------------------------------------------------ */
+const indentSheetName       = 'Indent Details';
+const errorLogSheetName     = 'Error Log';
+const executionLogSheetName = 'Execution Log';
+const formResponseSheetName = 'Form_responses_1';
+const tempFormSheetName     = 'Temp Form';
+const helperSheetName       = 'Helper';
+const o2dStylesSheetName    = 'O2D_Styles';
+const newEntrySheetName     = 'New_Entries';
+
+/* ===================================================================== *
+ *  Autocomplete helpers (Client / Style ID)                             *
+ * ===================================================================== */
+
+/**
+ * Return up to 10 distinct client names from O2D_Styles matching the query.
+ */
+function getClients(query) {
+  query = (query || '').toLowerCase();
+  var sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(o2dStylesSheetName);
+  if (!sh) throw new Error("Sheet '" + o2dStylesSheetName + "' not found.");
+  var raw = sh.getRange('A2:A' + sh.getLastRow()).getValues().flat()
+               .map(function(c){ return String(c).trim(); })
+               .filter(Boolean);
+  var uniq = [...new Set(raw)];
+  return uniq.filter(function(c){
+    return c.toLowerCase().indexOf(query) !== -1;
+  }).slice(0,10);
 }
 
-// Process multiple product rows with the same PO
+/**
+ * Return up to 10 Style IDs (from O2D_Styles) for the given client + query.
+ */
+function getStyleIDs(client, query) {
+  if (!client) return [];
+  query = (query||'').toLowerCase();
+  var sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(o2dStylesSheetName);
+  if (!sh) throw new Error("Sheet '" + o2dStylesSheetName + "' not found.");
+  var lcClient = client.toString().trim().toLowerCase();
+  var data = sh.getRange('A2:B' + sh.getLastRow()).getValues(); // [Client,Style]
+  var matches = data
+    .filter(function(r){ return String(r[0]).trim().toLowerCase() === lcClient; })
+    .map(function(r){ return String(r[1]).trim(); })
+    .filter(function(id){ return id && id.toLowerCase().indexOf(query)!==-1; });
+  return [...new Set(matches)].slice(0,10);
+}
+
+
+
+/* =================================================================== *
+ *  Duplicate guard: PO + Style ID + SKU + Material                    *
+ *  – NO user-cache; checks only what’s already in the sheet           *
+ * =================================================================== */
+
+/* Normalise a cell for comparison */
+function norm(s){
+  return String(s || '').replace(/^'/,'').trim().toUpperCase();
+}
+
+function isDuplicatePOStyleSKUMat(poNum, styleId, sku, material) {
+
+  var sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(indentSheetName);
+  if (!sh) throw new Error('Sheet "' + indentSheetName + '" not found.');
+
+  var lastRow = sh.getLastRow();
+  if (lastRow < 2) return false;            // no data yet
+
+  // Columns: B = PO, C = Style_ID, F = Product Code (SKU), G = Material Name
+  var poCol  = sh.getRange(2,2,lastRow-1,1).getValues();
+  var stCol  = sh.getRange(2,3,lastRow-1,1).getValues();
+  var skuCol = sh.getRange(2,6,lastRow-1,1).getValues();
+  var matCol = sh.getRange(2,7,lastRow-1,1).getValues();
+
+  for (var i = 0; i < poCol.length; i++) {
+    if (   norm(poCol[i][0])  === norm(poNum)     &&
+           norm(stCol[i][0])  === norm(styleId)   &&
+           norm(skuCol[i][0]) === norm(sku)       &&
+           norm(matCol[i][0]) === norm(material)) {
+      return true;                              // exact quartet already exists
+    }
+  }
+  return false;                                 // unique
+}
+
+
+
+
+/* =================================================================== *
+ *  PO-photo presence check                                            *
+ * =================================================================== */
+/**
+ * Returns true if “Form_responses_1” contains a non-blank photo URL
+ * for the given PO Number.
+ */
+function isPhotoUploaded(poNumberRaw) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sh = ss.getSheetByName(formResponseSheetName);
+  if (!sh) throw new Error("Sheet '" + formResponseSheetName + "' not found.");
+  var data = sh.getDataRange().getValues();
+  for (var i=1; i<data.length; i++) {
+    var po  = String(data[i][1]).trim(); // col B
+    var url = String(data[i][2]).trim(); // col C
+    if (po === poNumberRaw && url) return true;
+  }
+  return false;
+}
+
+/* ===================================================================== *
+ *  Main submission                                                      *
+ * ===================================================================== */
 function submitIndent(form) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = ss.getSheetByName(indentSheetName);
+  var lock = LockService.getUserLock();
+  try {
+    lock.waitLock(30000);
 
-  const styleId = form.styleId;
-  const client = form.client;
-  const poNumber = form.poNumber;
-  const poDate = form.poDate;
-  const photoUrl = form.photoUrl || fetchLatestPhoto(poNumber);  // Fetch the latest photo for the PO
-  const indents = form.indents;
+    var ss    = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = ss.getSheetByName(indentSheetName);
+    if (!sheet) throw new Error("Sheet '" + indentSheetName + "' not found.");
 
-  indents.forEach(item => {
-    sheet.appendRow([
-      styleId,
-      client,
-      poNumber,
-      poDate,
-      item.productCode,
-      item.materialName,
-      item.supplier,
-      item.quantity,
-      item.uom,
-      item.remarks,
-      photoUrl
-    ]);
-  });
+    // Basic header fields
+    var poDateRaw   = form.poDate;
+    var poNumberRaw = String(form.poNumber||'').trim();
+    if (!poNumberRaw) throw new Error('PO Number is blank.');
 
-  return `PO ${poNumber} submitted with ${indents.length} items.`;
+    // Enforce photo uploaded
+    if (!isPhotoUploaded(poNumberRaw)) {
+      return {
+        status: 'error',
+        message: 'Upload the PO photo in the Google Form before submitting.'
+      };
+    }
+
+    var poNumberSheet = "'" + poNumberRaw;   // force text
+    var client        = form.client;
+    logNewClient(client);
+
+    var supplier      = form.supplier;
+    var targetDateRaw = form.targetDate;
+    var styles        = JSON.parse(form.styles);
+
+    var poDate      = Utilities.formatDate(new Date(poDateRaw),
+                          Session.getScriptTimeZone(), 'dd/MM/yyyy');
+    var targetDate  = Utilities.formatDate(new Date(targetDateRaw),
+                          Session.getScriptTimeZone(), 'dd/MM/yyyy');
+    var timestamp   = Utilities.formatDate(new Date(),
+                          Session.getScriptTimeZone(), 'dd/MM/yyyy HH:mm:ss');
+
+    // Build rows & duplicate check
+    var rows = [];
+    styles.forEach(function(s){
+      s.products.forEach(function(p){
+        if (isDuplicatePOStyleSKUMat(poNumberRaw, s.styleId,
+                                     p.productCode, p.materialName)) {
+          throw new Error(
+            'Duplicate blocked: PO "' + poNumberRaw +
+            '", Style "' + s.styleId +
+            '", SKU "' + p.productCode +
+            '", Material "' + p.materialName + '" already exists.'
+          );
+        }
+        rows.push([
+          poDate, poNumberSheet, s.styleId, client, supplier,
+          p.productCode, p.materialName,
+          p.quantity, p.uom, targetDate, '', timestamp
+        ]);
+      });
+    });
+
+    // Write once
+    var startRow = sheet.getLastRow() + 1;
+    sheet.getRange(startRow,1,rows.length,rows[0].length).setValues(rows);
+
+    logExecution('PO ' + poNumberRaw + ' submitted (' + rows.length + ' rows).');
+    return { status:'success', message:'PO ' + poNumberRaw + ' submitted.' };
+
+  } catch (err) {
+    logError('Submission failed: ' + err.message);
+    return { status:'error', message:'Submission failed: ' + err.message };
+  } finally {
+    lock.releaseLock();
+  }
 }
 
-// Fetch the latest uploaded photo URL from Google Drive for a specific PO
-function fetchLatestPhoto(poNumber) {
-  const folder = DriveApp.getFolderById(folderId);
-  const files = folder.getFiles();
-  let latestFile;
-
-  while (files.hasNext()) {
-    let file = files.next();
-    if (!latestFile || file.getDateCreated() > latestFile.getDateCreated()) {
-      latestFile = file;
-    }
+/* ===================================================================== *
+ *  Misc helpers (logging, temp-save, etc.)                              *
+ * ===================================================================== */
+function logNewClient(client){
+  if(!client) return;
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sh = ss.getSheetByName(newEntrySheetName);
+  if(!sh){
+    sh = ss.insertSheet(newEntrySheetName);
+    sh.appendRow(['Client','Timestamp']);
   }
+  var exists = sh.getRange('A2:A'+sh.getLastRow()).getValues()
+                 .some(function(r){return r[0]===client;});
+  if(!exists) sh.appendRow([client,new Date()]);
+}
 
-  if (latestFile) {
-    return latestFile.getUrl();
+function logExecution(msg){
+  var sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(executionLogSheetName);
+  if(sh) sh.appendRow([new Date(),'INFO',msg]);
+}
+
+function logError(msg){
+  var sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(errorLogSheetName);
+  if(sh) sh.appendRow([new Date(),'ERROR',msg]);
+}
+
+/* ===================================================================== *
+ *  Extend XLOOKUP, triggers, onOpen                                      *
+ * ===================================================================== */
+function extendXLOOKUP(){
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var indentSheet = ss.getSheetByName(indentSheetName);
+  var helperSheet = ss.getSheetByName(helperSheetName);
+  if(!indentSheet||!helperSheet) return;
+  var lastRow = indentSheet.getLastRow();
+  var lastProc = helperSheet.getRange('A1').getValue();
+  if(!lastProc||isNaN(lastProc)) lastProc=1;
+  if(lastRow>lastProc){
+    for(var i=lastProc+1;i<=lastRow;i++){
+      var po = indentSheet.getRange(i,2).getValue().toString().trim();
+      var formula = '=IFERROR(XLOOKUP("'+po+'",Form_Responses_1!B:B,Form_Responses_1!C:C,"No photo uploaded",0,-1),"No photo uploaded")';
+      indentSheet.getRange(i,11).setFormula(formula);
+    }
+    helperSheet.getRange('A1').setValue(lastRow);
+  }
+}
+
+function onOpen(){
+  extendXLOOKUP();
+}
+
+function createTriggers(){
+  var t = ScriptApp.getProjectTriggers();
+  t.forEach(function(tr){ScriptApp.deleteTrigger(tr);});
+  ScriptApp.newTrigger('extendXLOOKUP').timeBased().everyHours(1).create();
+  ScriptApp.newTrigger('sendErrorSummary').timeBased().everyHours(3).create();
+}
+
+function sendErrorSummary(){
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sh = ss.getSheetByName(errorLogSheetName);
+  if(!sh) return;
+  var errs = sh.getDataRange().getValues();
+  if(errs.length<=1) return;
+  var h = Number(Utilities.formatDate(new Date(),Session.getScriptTimeZone(),'H'));
+  if(h<9||h>=21) return;
+  var sum='Error Summary:\n\n';
+  for(var i=1;i<errs.length;i++){
+    sum += 'Timestamp: '+errs[i][0]+', PO: '+errs[i][1]+', Error: '+errs[i][2]+'\n';
+  }
+  MailApp.sendEmail('mis@fabcott.in','PO Form Errors',sum);
+  sh.getRange('A2:C'+sh.getLastRow()).clearContent();
+}
+
+/* ===================================================================== *
+ *  Temp-save & restore draft                                            *
+ * ===================================================================== */
+function saveTempForm(form){
+  try{
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var ts = ss.getSheetByName(tempFormSheetName);
+    if(!ts){
+      ts = ss.insertSheet(tempFormSheetName);
+      ts.appendRow(['poDate','poNumber','client','supplier','targetDate','styles','timestamp']);
+    }
+    var pr = form.poDate;
+    var pn = String(form.poNumber);
+    var cl = form.client;
+    var sp = form.supplier;
+    var td = form.targetDate;
+    var st = form.styles;
+    var tsn = Utilities.formatDate(new Date(),Session.getScriptTimeZone(),'dd/MM/yyyy HH:mm:ss');
+    ts.appendRow([pr,pn,cl,sp,td,st,tsn]);
+    logExecution('Draft saved: PO='+pn);
+    return 'Form saved temporarily.';
+  }catch(e){
+    logError('Temp save failed: '+e.message);
+    return 'Temp save failed: '+e.message;
+  }
+}
+
+function getLatestTempForm(){
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var ts = ss.getSheetByName(tempFormSheetName);
+  if(!ts) return null;
+  var lr = ts.getLastRow();
+  if(lr<2) return null;
+  var v = ts.getRange(lr,1,1,7).getValues()[0];
+  return {
+    poDate    : v[0],
+    poNumber  : v[1],
+    client    : v[2],
+    supplier  : v[3],
+    targetDate: v[4],
+    styles    : v[5]
+  };
+}
+
+/* ===================================================================== *
+ *  Utility to convert ancient dates                                     *
+ * ===================================================================== */
+function convertAncientDate(input){
+  if(Array.isArray(input)){
+    return input.map(convertAncientDate);
+  }
+  var d;
+  if(input instanceof Date){
+    d = input;
   } else {
-    Logger.log(`No photo uploaded for PO ${poNumber}.`);
-    return "No photo uploaded.";
+    var n=Number(input);
+    if(isNaN(n)) return input;
+    var b=new Date(1899,11,30);
+    d=new Date(b.getTime()+n*86400000);
   }
+  if(isNaN(d.getTime())) return '';
+  var y=d.getFullYear(), m=d.getMonth()+1;
+  return y+'/'+(m<10?'0'+m:m);
 }
 
-// Sync photo URLs from Google Form responses to the Indent Details sheet
-function syncPhotoToIndent() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const indentSheet = ss.getSheetByName(indentSheetName);
-  const formResponseSheet = ss.getSheetByName(formResponseSheetName);
+/* ===================================================================== *
+ *  Web-app entry point                                                  *
+ * ===================================================================== */
+function doGet(){
+  return HtmlService.createHtmlOutputFromFile('Index')
+                    .setTitle('PO Submission Form');
+}
 
-  const formData = formResponseSheet.getDataRange().getValues();
-  const indentData = indentSheet.getDataRange().getValues();
-
-  const indentHeaders = indentData[0];
-  const formHeaders = formData[0];
-
-  const poIndex = indentHeaders.indexOf("PO Number");
-  const photoIndex = indentHeaders.indexOf("Photo");
-  const formPoIndex = formHeaders.indexOf("PO Number");
-  const fileUrlIndex = formHeaders.indexOf("File Upload");  // Match the file upload column name in Form Responses
-
-  if (poIndex === -1 || photoIndex === -1 || formPoIndex === -1 || fileUrlIndex === -1) {
-    Logger.log("Required columns not found.");
-    return;
-  }
-
-  // Iterate through form responses
-  for (let i = 1; i < formData.length; i++) {
-    const formPoNumber = formData[i][formPoIndex];
-    const uploadedPhotoUrl = formData[i][fileUrlIndex];
-
-    // Find matching PO in the indent details
-    for (let j = 1; j < indentData.length; j++) {
-      const indentPoNumber = indentData[j][poIndex];
-
-      if (formPoNumber === indentPoNumber && !indentData[j][photoIndex]) {
-        indentSheet.getRange(j + 1, photoIndex + 1).setValue(uploadedPhotoUrl);
-        Logger.log(`Photo for PO ${formPoNumber} added to indent sheet.`);
-        break;
-      }
-    }
-  }
+/* ===================================================================== *
+ *  MasterItems helper – for SKU/Item dropdowns                          *
+ * ===================================================================== */
+function getMasterItems(){
+  var sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('MasterItems');
+  if(!sh) throw new Error("Sheet 'MasterItems' does not exist.");
+  var data = sh.getDataRange().getValues();
+  var hdr  = data.shift();
+  return data.filter(function(r){ return r[0]!==''&&r[0]!=null; })
+             .map(function(r){
+               var o={};
+               hdr.forEach(function(h,i){ o[h]=r[i]?String(r[i]):''; });
+               return o;
+             });
 }
