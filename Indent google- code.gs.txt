@@ -1,300 +1,99 @@
-// Code.gs
-
-// Code.gs
-
-
+const folderId = '1ioy_uWVdBG8DP7jKF1krKe_HyORvbXVdf9xDVtggDyp9qxFCeOQWQX8yv2SrSO-PVTByFXPI';  // Google Drive Folder ID for photo uploads
 const indentSheetName = "Indent Details";
-const errorLogSheetName = "Error Log";
-const executionLogSheetName = "Execution Log";
-const formResponseSheetName = "Form Responses 1";
-const tempFormSheetName = "Temp Form";
-const helperSheetName = "Helper";
+const formResponseSheetName = "Form Responses 1";  // Default Form Response Sheet Name
 
-// Entry point for the web app
 function doGet() {
-  return HtmlService.createHtmlOutputFromFile('Index').setTitle('PO Submission Form');
-}
-/* ======================================================================= */
-/*  1.  Duplicate-block helper                                             */
-/* ======================================================================= */
-const DUPLICATE_WINDOW_SEC = 600;                     // 10-minute lock
-
-/**
- * Returns true if this user submitted the same PO in the last
- * DUPLICATE_WINDOW_SEC seconds.
- * Uses CacheService (fast) AND writes the stamp *inside* a user lock
- * so two nearly-simultaneous clicks cannot slip through.
- */
-function isDuplicate(rawPo, lock) {
-  const cache = CacheService.getUserCache();          // per-user
-  const key   = 'PO#' + rawPo.trim().toUpperCase();
-  const now   = Math.floor(Date.now() / 1000);
-  const last  = Number(cache.get(key)) || 0;
-
-  const duplicate = (now - last < DUPLICATE_WINDOW_SEC);
-  cache.put(key, String(now), DUPLICATE_WINDOW_SEC);  // stamp it
-  return duplicate;
+  return HtmlService.createHtmlOutputFromFile('Index');
 }
 
-/* ======================================================================= */
-/*  2.  Main submission function                                           */
-/* ======================================================================= */
+// Process multiple product rows with the same PO
 function submitIndent(form) {
-  const lock = LockService.getUserLock();
-  try {
-    lock.waitLock(30000);                               // 30 s max
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(indentSheetName);
 
-    const ss    = SpreadsheetApp.getActiveSpreadsheet();
-    const sheet = ss.getSheetByName(indentSheetName);
-    if (!sheet) throw new Error(`Sheet "${indentSheetName}" not found.`);
+  const styleId = form.styleId;
+  const client = form.client;
+  const poNumber = form.poNumber;
+  const poDate = form.poDate;
+  const photoUrl = form.photoUrl || fetchLatestPhoto(poNumber);  // Fetch the latest photo for the PO
+  const indents = form.indents;
 
-    /* ---------- basic fields ---------- */
-    const poDateRaw   = form.poDate;
-    const poNumberRaw = String(form.poNumber || '').trim();
-    if (!poNumberRaw) throw new Error('PO Number is blank.');
+  indents.forEach(item => {
+    sheet.appendRow([
+      styleId,
+      client,
+      poNumber,
+      poDate,
+      item.productCode,
+      item.materialName,
+      item.supplier,
+      item.quantity,
+      item.uom,
+      item.remarks,
+      photoUrl
+    ]);
+  });
 
-    if (isDuplicate(poNumberRaw, lock)) {
-      return { status:'error', message:'Duplicate submission blocked.' };
+  return `PO ${poNumber} submitted with ${indents.length} items.`;
+}
+
+// Fetch the latest uploaded photo URL from Google Drive for a specific PO
+function fetchLatestPhoto(poNumber) {
+  const folder = DriveApp.getFolderById(folderId);
+  const files = folder.getFiles();
+  let latestFile;
+
+  while (files.hasNext()) {
+    let file = files.next();
+    if (!latestFile || file.getDateCreated() > latestFile.getDateCreated()) {
+      latestFile = file;
     }
+  }
 
-    const poNumberSheet = "'" + poNumberRaw;            // text in sheet
-    const client   = form.client;
-    const supplier = form.supplier;
-    const remarks  = form.remarks || '';
-    const styles   = JSON.parse(form.styles);
-
-    const poDate   = Utilities.formatDate(new Date(poDateRaw),
-                     Session.getScriptTimeZone(), 'dd/MM/yyyy HH:mm:ss');
-    const timestamp = Utilities.formatDate(new Date(),
-                     Session.getScriptTimeZone(), 'dd/MM/yyyy HH:mm:ss');
-
-    /* ---------- build rows locally ---------- */
-    const rows = [];
-    styles.forEach(s =>
-      s.products.forEach(p =>
-        rows.push([
-          poDate, poNumberSheet, s.styleId, client, supplier,
-          p.productCode, p.materialName,
-          p.quantity, p.uom, remarks, '', timestamp
-        ])
-      )
-    );
-
-    /* ---------- write once ---------- */
-    const startRow = sheet.getLastRow() + 1;
-    sheet.getRange(startRow, 1, rows.length, rows[0].length)
-         .setValues(rows);
-
-    logExecution(`PO ${poNumberRaw} submitted (${rows.length} rows).`);
-    return { status:'success',
-             message:`PO ${poNumberRaw} submitted.` };
-
-  } catch (err) {
-    logError(`Submission failed: ${err.message}`);
-    return { status:'error', message:`Submission failed: ${err.message}` };
-  } finally {
-    lock.releaseLock();
+  if (latestFile) {
+    return latestFile.getUrl();
+  } else {
+    Logger.log(`No photo uploaded for PO ${poNumber}.`);
+    return "No photo uploaded.";
   }
 }
 
-
-
-
-
-// Function to log execution details
-function logExecution(message) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const logSheet = ss.getSheetByName(executionLogSheetName);
-  if (!logSheet) return;
-  const logTimestamp = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "dd/MM/yyyy HH:mm:ss");
-  logSheet.appendRow([logTimestamp, "INFO", message]);
-}
-
-// Function to log errors
-function logError(message) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const errorSheet = ss.getSheetByName(errorLogSheetName);
-  if (!errorSheet) return;
-  const errorTimestamp = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "dd/MM/yyyy HH:mm:ss");
-  errorSheet.appendRow([errorTimestamp, "ERROR", message]);
-}
-
-// (Other functions remain unchanged)
-
-
-// Function to extend XLOOKUP formulas
-function extendXLOOKUP() {
+// Sync photo URLs from Google Form responses to the Indent Details sheet
+function syncPhotoToIndent() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const indentSheet = ss.getSheetByName(indentSheetName);
-  const helperSheet = ss.getSheetByName(helperSheetName);
-  if (!indentSheet || !helperSheet) {
-    logError(`Sheets "${indentSheetName}" or "${helperSheetName}" not found.`);
+  const formResponseSheet = ss.getSheetByName(formResponseSheetName);
+
+  const formData = formResponseSheet.getDataRange().getValues();
+  const indentData = indentSheet.getDataRange().getValues();
+
+  const indentHeaders = indentData[0];
+  const formHeaders = formData[0];
+
+  const poIndex = indentHeaders.indexOf("PO Number");
+  const photoIndex = indentHeaders.indexOf("Photo");
+  const formPoIndex = formHeaders.indexOf("PO Number");
+  const fileUrlIndex = formHeaders.indexOf("File Upload");  // Match the file upload column name in Form Responses
+
+  if (poIndex === -1 || photoIndex === -1 || formPoIndex === -1 || fileUrlIndex === -1) {
+    Logger.log("Required columns not found.");
     return;
   }
 
-  const lastRow = indentSheet.getLastRow();
-  let lastProcessedRow = helperSheet.getRange("A1").getValue();
-  if (!lastProcessedRow || isNaN(lastProcessedRow)) lastProcessedRow = 1;
+  // Iterate through form responses
+  for (let i = 1; i < formData.length; i++) {
+    const formPoNumber = formData[i][formPoIndex];
+    const uploadedPhotoUrl = formData[i][fileUrlIndex];
 
-  if (lastRow > lastProcessedRow) {
-    for (let i = lastProcessedRow + 1; i <= lastRow; i++) {
-      const poNumber = indentSheet.getRange(i, 2).getValue(); // Column B
-      const formula = `=IFERROR(XLOOKUP("${poNumber}", 'Form Responses 1'!B:B, 'Form Responses 1'!C:C,"",0,-1), "No photo uploaded")`;
-      indentSheet.getRange(i, 11).setFormula(formula); // Column K
+    // Find matching PO in the indent details
+    for (let j = 1; j < indentData.length; j++) {
+      const indentPoNumber = indentData[j][poIndex];
+
+      if (formPoNumber === indentPoNumber && !indentData[j][photoIndex]) {
+        indentSheet.getRange(j + 1, photoIndex + 1).setValue(uploadedPhotoUrl);
+        Logger.log(`Photo for PO ${formPoNumber} added to indent sheet.`);
+        break;
+      }
     }
-    helperSheet.getRange("A1").setValue(lastRow);
   }
-}
-
-// Function to handle onOpen trigger
-function onOpen() {
-  extendXLOOKUP();
-}
-
-// Function to create necessary triggers
-function createTriggers() {
-  // Delete existing triggers to avoid duplicates
-  const triggers = ScriptApp.getProjectTriggers();
-  triggers.forEach(trigger => {
-    ScriptApp.deleteTrigger(trigger);
-  });
-
-  // Create a trigger for extendXLOOKUP every hour
-  ScriptApp.newTrigger('extendXLOOKUP')
-    .timeBased()
-    .everyHours(1)
-    .create();
-
-  // Create a trigger for sendErrorSummary every 3 hours
-  ScriptApp.newTrigger('sendErrorSummary')
-    .timeBased()
-    .everyHours(3)
-    .create();
-}
-
-// Function to send error summaries via email
-function sendErrorSummary() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const errorSheet = ss.getSheetByName(errorLogSheetName);
-  if (!errorSheet) return;
-  const errors = errorSheet.getDataRange().getValues();
-  const now = new Date();
-  const hour = Utilities.formatDate(now, Session.getScriptTimeZone(), "H"); // 24-hour format
-
-  // Only send between 9 AM to 9 PM IST (assuming script timezone is set to IST)
-  if (parseInt(hour) < 9 || parseInt(hour) >= 21) return;
-
-  if (errors.length <= 1) return; // No errors to send
-
-  let summary = 'Error Summary:\n\n';
-  for (let i = 1; i < errors.length; i++) {
-    summary += `Timestamp: ${errors[i][0]}, PO Number: ${errors[i][1]}, Error: ${errors[i][2]}\n`;
-  }
-
-  MailApp.sendEmail({
-    to: 'mis@fabcott.in', // Replace with your email
-    subject: 'PO Form Errors',
-    body: summary
-  });
-
-  // Clear Error Log after sending
-  if (errors.length > 1) {
-    errorSheet.getRange('A2:C' + errorSheet.getLastRow()).clearContent();
-  }
-}
-
-// Function to save form data temporarily
-function saveTempForm(form) {
-  try {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    let tempSheet = ss.getSheetByName(tempFormSheetName);
-    if (!tempSheet) {
-      tempSheet = ss.insertSheet(tempFormSheetName);
-      tempSheet.appendRow(["poDate", "poNumber", "client", "supplier", "remarks", "styles", "timestamp"]);
-    }
-
-    const poDateRaw = form.poDate;
-    const poNumber = form.poNumber.toString();
-    const client = form.client;
-    const supplier = form.supplier;
-    const remarks = form.remarks || "";
-    const styles = form.styles; // JSON string
-    const timestamp = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "dd/MM/yyyy HH:mm:ss");
-
-    tempSheet.appendRow([poDateRaw, poNumber, client, supplier, remarks, styles, timestamp]);
-    logExecution(`Form data saved temporarily: PO Number=${poNumber}`);
-    return "Form saved temporarily.";
-  } catch (error) {
-    logError(`Temporary save failed: ${error.message}`);
-    return `Temporary save failed: ${error.message}`;
-  }
-}
-
-
-
-
-
-/**
- * Converts a date (either as a serial number or a Date object) into a text string in the format "yyyy/mm".
- * Handles pre-1900 dates that might have negative serials.
- *
- * @param {number|Date|string|Array} input - A date serial, Date object, or an array of such values.
- * @return {string|string[]} The date formatted as "yyyy/mm".
- * @customfunction
- */
-function convertAncientDate(input) {
-  // If input is an array, process each element recursively.
-  if (Array.isArray(input)) {
-    return input.map(convertAncientDate);
-  }
-  
-  var d;
-  // If input is already a Date object, use it.
-  if (input instanceof Date) {
-    d = input;
-  } else {
-    // Try converting the input to a number.
-    var num = Number(input);
-    if (isNaN(num)) {
-      // If it's not a number, perhaps it's a string already in the desired format.
-      // You can choose to return it directly, or return an empty string.
-      return input;
-    }
-    // Use December 30, 1899 as the base date (Google Sheets' base for serial 0).
-    var baseDate = new Date(1899, 11, 30);
-    // Calculate the date by adding the serial (which might be negative) in days.
-    d = new Date(baseDate.getTime() + num * 24 * 60 * 60 * 1000);
-  }
-  
-  // If we still don't have a valid date, return an empty string.
-  if (isNaN(d.getTime())) return "";
-  
-  // Extract year and month.
-  var year = d.getFullYear();
-  var month = d.getMonth() + 1; // getMonth() is zero-indexed.
-  
-  // Return the formatted string.
-  return year + "/" + (month < 10 ? "0" + month : month);
-}
-
-
-function saveTempForm(form) {
-  /* unchanged… */
-}
-
-function getLatestTempForm() {
-  const sheet = SpreadsheetApp.getActiveSpreadsheet()
-                .getSheetByName(tempFormSheetName);
-  if (!sheet) return null;
-  const lastRow = sheet.getLastRow();
-  if (lastRow < 2) return null;                  // header only
-  const values  = sheet.getRange(lastRow, 1, 1, 7).getValues()[0];
-  return {                                       // send back to client
-    poDate  : values[0],
-    poNumber: values[1],
-    client  : values[2],
-    supplier: values[3],
-    remarks : values[4],
-    styles  : values[5]                          // JSON string
-  };
 }
