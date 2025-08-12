@@ -1,0 +1,626 @@
+<!-- Index.html -->
+
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+        background-color: #f9f9f9;
+      }
+      .container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 20px;
+      }
+      h2 {
+        text-align: center;
+        margin-bottom: 20px;
+      }
+      form {
+        background-color: #ffffff;
+        padding: 15px;
+        border-radius: 8px;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+      }
+      .section {
+        margin-bottom: 15px;
+      }
+      .section label {
+        display: block;
+        margin-bottom: 5px;
+        font-weight: bold;
+      }
+      .section input, .section textarea {
+        width: 100%;
+        padding: 6px 8px;
+        margin-bottom: 8px;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        font-size: 13px;
+      }
+      .stylesContainer, .productsContainer {
+        margin-top: 10px;
+      }
+      .style, .product {
+        border: 1px solid #ddd;
+        padding: 8px;
+        margin-bottom: 8px;
+        border-radius: 5px;
+        background-color: #fefefe;
+      }
+      .style-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        cursor: pointer;
+        background-color: #e7f3fe;
+        padding: 6px 8px;
+        border-radius: 4px;
+        margin-bottom: 5px;
+      }
+      .style-header h4 {
+        margin: 0;
+        font-size: 14px;
+      }
+      .content {
+        display: none;
+        padding: 0 8px;
+      }
+      button {
+        padding: 5px 10px;
+        margin-top: 5px;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 12px;
+      }
+      .remove-btn {
+        background-color: #e74c3c;
+        color: white;
+      }
+      .add-btn {
+        background-color: #2ecc71;
+        color: white;
+      }
+      .submit-btn {
+        background-color: #3498db;
+        color: white;
+        width: 100%;
+        padding: 8px;
+        font-size: 14px;
+      }
+      .upload-btn {
+        background-color: #9b59b6;
+        color: white;
+        width: 100%;
+        padding: 8px;
+        font-size: 14px;
+      }
+      /* Responsive Adjustments */
+      @media (min-width: 600px) {
+        .form-group {
+          display: flex;
+          justify-content: space-between;
+          gap: 10px;
+        }
+        .form-group .half-width {
+          width: 48%;
+        }
+      }
+      /* Reduce spacing for multiple items */
+      .style, .product {
+        margin-bottom: 6px;
+        padding: 6px;
+      }
+      .style-header, .content {
+        padding: 4px 6px;
+      }
+      .section input, .section textarea {
+        padding: 5px 7px;
+        font-size: 12px;
+      }
+      button {
+        padding: 4px 8px;
+        font-size: 11px;
+      }
+      h3, h4, h5 {
+        margin-bottom: 8px;
+        font-size: 14px;
+      }
+      /* Adjust button spacing */
+      .add-btn, .remove-btn, .submit-btn, .upload-btn {
+        margin-top: 4px;
+      }
+      /* Product fields layout */
+      .product-fields {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+      }
+      .product-fields .field {
+        flex: 1;
+        min-width: 100px;
+      }
+      .product-fields .full-width {
+        flex: 1 1 100%;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h2>Purchase Order Submission</h2>
+      <form id="poForm">
+        <!-- Basic PO Details -->
+        <div class="section">
+           <label><strong>PO Number:</strong></label>
+          <input type="text" name="poNumber" required pattern="\d+/\d+" title="Format: 1234/12">
+          
+          <label><strong>PO Date and Time:</strong></label>
+          <input type="datetime-local" name="poDate" required>
+          
+          <label><strong>Client:</strong></label>
+          <input type="text" name="client" required>
+          
+          <label><strong>Supplier:</strong></label>
+          <input type="text" name="supplier" required>
+          
+          <label><strong>Remarks:</strong></label>
+          <textarea name="remarks" rows="2"></textarea>
+        </div>
+
+        <!-- Styles Container -->
+        <div id="stylesContainer">
+          <h3>Styles</h3>
+          <div class="style">
+            <div class="style-header" onclick="toggleSection(this)">
+              <h4>Style 1</h4>
+              <button type="button" class="remove-style remove-btn" onclick="removeStyle(this)">Remove</button>
+            </div>
+            <div class="content">
+              <label><strong>Style ID:</strong></label>
+              <input type="text" name="styleId" required>
+              
+              <!-- Products Container -->
+              <div class="productsContainer">
+                <h5>Products</h5>
+                <div class="product">
+                  <div class="product-fields">
+                    <div class="field">
+                      <label><strong>Product Code:</strong></label>
+                      <input type="text" name="productCode" required>
+                    </div>
+                    <div class="field">
+                      <label><strong>Quantity:</strong></label>
+                      <input type="number" name="quantity" required min="1">
+                    </div>
+                    <div class="field">
+                      <label><strong>UOM:</strong></label>
+                      <input type="text" name="uom" required>
+                    </div>
+                  </div>
+                  <div class="full-width">
+                    <label><strong>Material Name:</strong></label>
+                    <input type="text" name="materialName" required>
+                  </div>
+                  <button type="button" class="remove-product remove-btn" onclick="removeProduct(this)">Remove Product</button>
+                </div>
+              </div>
+              <button type="button" class="add-btn" onclick="addProduct(this)">Add Product</button>
+            </div>
+          </div>
+        </div>
+
+        <button type="button" class="add-btn" onclick="addStyle()">Add Style</button><br>
+
+        <!-- Form Action Buttons -->
+        <button type="button" class="add-btn" onclick="saveForm()">Save Temporarily</button>
+        <button type="submit" class="submit-btn">Submit PO</button><br>
+        <button type="button" class="upload-btn" onclick="openGoogleForm()">Upload Photo</button>
+      </form>
+    </div>
+
+    <script>
+
+ 
+
+/* ------------------------------------------------------------------ */
+/* 0.  Guarantee EXACTLY ONE handler                                   */
+/* ------------------------------------------------------------------ */
+const poForm    = document.getElementById('poForm');
+const submitBtn = poForm.querySelector('.submit-btn');
+
+/* remove EVERY previously attached submit listener */
+const clone = poForm.cloneNode(true);          // shallow clone keeps markup
+poForm.parentNode.replaceChild(clone, poForm); // swap -> zero listeners
+/* re-grab elements after swap */
+const form     = document.getElementById('poForm');
+const btn      = form.querySelector('.submit-btn');
+
+/* ------------------------------------------------------------------ */
+/* 1.  Restore temp draft                                              */
+/* ------------------------------------------------------------------ */
+window.addEventListener('load', () => {
+  google.script.run.withSuccessHandler(fillFromTemp).getLatestTempForm();
+});
+
+function fillFromTemp(d) {
+  if (!d) return;
+  form.poDate.value    = d.poDate   || '';
+  form.poNumber.value  = d.poNumber || '';
+  form.client.value    = d.client   || '';
+  form.supplier.value  = d.supplier || '';
+  form.remarks.value   = d.remarks  || '';
+  if (d.styles) rebuildStyles(JSON.parse(d.styles));
+}
+
+/* ------------------------------------------------------------------ */
+/* 2.  Helpers                                                         */
+/* ------------------------------------------------------------------ */
+function buildPayload() {
+  const fd = new FormData(form);
+  const payload = {
+    poDate   : fd.get('poDate'),
+    poNumber : fd.get('poNumber'),
+    client   : fd.get('client'),
+    supplier : fd.get('supplier'),
+    remarks  : fd.get('remarks') || ''
+  };
+  /* collect styles/products */
+  const styles = [];
+  form.querySelectorAll('.style').forEach(s => {
+    const styleId  = s.querySelector('[name="styleId"]').value.trim();
+    const products = [];
+    s.querySelectorAll('.product').forEach(p => products.push({
+      productCode  : p.querySelector('[name="productCode"]').value.trim(),
+      materialName : p.querySelector('[name="materialName"]').value.trim(),
+      quantity     : p.querySelector('[name="quantity"]').value.trim(),
+      uom          : p.querySelector('[name="uom"]').value.trim()
+    }));
+    styles.push({styleId, products});
+  });
+  payload.styles = JSON.stringify(styles);
+  return payload;
+}
+function restoreBtn() {
+  btn.disabled = false;
+  btn.textContent = 'Submit PO';
+}
+/* keep your existing resetStyles() / rebuildStyles() implementations */
+
+/* ------------------------------------------------------------------ */
+/* 3.  ONE-TIME submit handler                                         */
+/* ------------------------------------------------------------------ */
+form.addEventListener('submit', e => {
+  e.preventDefault();
+  e.stopImmediatePropagation();      // block any stray listeners
+
+  btn.disabled = true;
+  btn.textContent = 'Submitting…';
+
+  const payload = buildPayload();
+
+  google.script.run
+    .withSuccessHandler(res => {
+      restoreBtn();
+      alert(res.message);
+      if (res.status === 'success') {
+        form.reset();
+        resetStyles();               // your helper
+      }
+    })
+    .withFailureHandler(err => {
+      restoreBtn();
+      alert('Submission failed: ' + err.message);
+    })
+    .submitIndent(payload);
+}, { once: true });                  // browser removes it after first run
+
+
+
+
+
+
+
+
+
+      let styleCount = 1;
+
+      // Function to Add a New Style
+      function addStyle() {
+        styleCount++;
+        const stylesContainer = document.getElementById('stylesContainer');
+        const styleDiv = document.createElement('div');
+        styleDiv.className = 'style';
+        styleDiv.innerHTML = `
+          <div class="style-header" onclick="toggleSection(this)">
+            <h4>Style ${styleCount}</h4>
+            <button type="button" class="remove-style remove-btn" onclick="removeStyle(this)">Remove</button>
+          </div>
+          <div class="content">
+            <label><strong>Style ID:</strong></label>
+            <input type="text" name="styleId" required>
+            
+            <div class="productsContainer">
+              <h5>Products</h5>
+              <div class="product">
+                <div class="product-fields">
+                  <div class="field">
+                    <label><strong>Product Code:</strong></label>
+                    <input type="text" name="productCode" required>
+                  </div>
+                  <div class="field">
+                    <label><strong>Quantity:</strong></label>
+                    <input type="number" name="quantity" required min="1">
+                  </div>
+                  <div class="field">
+                    <label><strong>UOM:</strong></label>
+                    <input type="text" name="uom" required>
+                  </div>
+                </div>
+                <div class="full-width">
+                  <label><strong>Material Name:</strong></label>
+                  <input type="text" name="materialName" required>
+                </div>
+                <button type="button" class="remove-product remove-btn" onclick="removeProduct(this)">Remove Product</button>
+              </div>
+            </div>
+            <button type="button" class="add-btn" onclick="addProduct(this)">Add Product</button>
+          </div>
+        `;
+        stylesContainer.appendChild(styleDiv);
+      }
+
+      // Function to Remove a Style
+      function removeStyle(button) {
+        const styleDiv = button.closest('.style');
+        styleDiv.remove();
+        updateStyleHeaders();
+      }
+
+      // Function to Update Style Headers After Removal
+      function updateStyleHeaders() {
+        const styles = document.querySelectorAll('.style');
+        styleCount = 0;
+        styles.forEach((style, index) => {
+          styleCount++;
+          style.querySelector('.style-header h4').innerText = `Style ${styleCount}`;
+        });
+      }
+
+      // Function to Add a New Product
+      function addProduct(button) {
+        const productsContainer = button.parentElement.querySelector('.productsContainer');
+        const productDiv = document.createElement('div');
+        productDiv.className = 'product';
+        productDiv.innerHTML = `
+          <div class="product-fields">
+            <div class="field">
+              <label><strong>Product Code:</strong></label>
+              <input type="text" name="productCode" required>
+            </div>
+            <div class="field">
+              <label><strong>Quantity:</strong></label>
+              <input type="number" name="quantity" required min="1">
+            </div>
+            <div class="field">
+              <label><strong>UOM:</strong></label>
+              <input type="text" name="uom" required>
+            </div>
+          </div>
+          <div class="full-width">
+            <label><strong>Material Name:</strong></label>
+            <input type="text" name="materialName" required>
+          </div>
+          <button type="button" class="remove-product remove-btn" onclick="removeProduct(this)">Remove Product</button>
+        `;
+        productsContainer.appendChild(productDiv);
+      }
+
+      // Function to Remove a Product
+      function removeProduct(button) {
+        const productDiv = button.closest('.product');
+        productDiv.remove();
+      }
+
+      // Function to Toggle Collapsible Sections
+      function toggleSection(header) {
+        const content = header.nextElementSibling;
+        if (content.style.display === 'block') {
+          content.style.display = 'none';
+        } else {
+          content.style.display = 'block';
+        }
+      }
+
+      // Function to Save Form Temporarily
+      function saveForm() {
+        const form = document.getElementById('poForm');
+        const poDate = form.poDate.value;
+        const poNumber = form.poNumber.value;
+        const client = form.client.value;
+        const supplier = form.supplier.value;
+        const remarks = form.remarks.value;
+
+        const styles = [];
+        const styleDivs = document.querySelectorAll('.style');
+        styleDivs.forEach(styleDiv => {
+          const styleId = styleDiv.querySelector('input[name="styleId"]').value;
+          const products = [];
+          const productDivs = styleDiv.querySelectorAll('.product');
+          productDivs.forEach(productDiv => {
+            const productCode = productDiv.querySelector('input[name="productCode"]').value;
+            const materialName = productDiv.querySelector('input[name="materialName"]').value;
+            const quantity = productDiv.querySelector('input[name="quantity"]').value;
+            const uom = productDiv.querySelector('input[name="uom"]').value;
+            products.push({productCode, materialName, quantity, uom});
+          });
+          styles.push({styleId, products});
+        });
+
+        // Client-side Validation
+        if (!poNumber || !poDate || !client || !supplier) {
+          alert('Please fill in all required fields.');
+          return;
+        }
+
+        let valid = true;
+        styles.forEach(style => {
+          if (!style.styleId) {
+            valid = false;
+          }
+          style.products.forEach(product => {
+            if (!product.productCode || !product.materialName || !product.quantity || !product.uom) {
+              valid = false;
+            }
+          });
+        });
+
+        if (!valid) {
+          alert('Please fill in all required fields in styles and products.');
+          return;
+        }
+
+        google.script.run
+          .withSuccessHandler(function(response) {
+            alert(response);
+          })
+          .withFailureHandler(function(error) {
+            alert('Temporary save failed: ' + error.message);
+          })
+          .saveTempForm({
+            poDate,
+            poNumber,
+            client,
+            supplier,
+            remarks,
+            styles: JSON.stringify(styles)
+          });
+      }
+
+      // Function to Open Google Form for Photo Upload
+      function openGoogleForm() {
+        const formUrl = 'https://docs.google.com/forms/d/e/1FAIpQLSc7Yx1XxeADqAYZbDR3jFLxiU52gd2N7cBxEWxGh0yKyWfgdg/viewform'; // Replace with your actual Google Form URL
+        window.open(formUrl, '_blank');
+      }
+
+      // Form Submission with Validation and Error Handling
+      document.getElementById('poForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        const form = e.target;
+
+        const poNumber = form.poNumber.value.trim();
+        const poDate = form.poDate.value.trim();
+        const client = form.client.value.trim();
+        const supplier = form.supplier.value.trim();
+
+        // Basic Validation
+        if (!poNumber || !poDate || !client || !supplier) {
+          alert('Please fill in all required fields.');
+          return;
+        }
+
+        const styles = [];
+        const styleDivs = document.querySelectorAll('.style');
+        let valid = true;
+
+        styleDivs.forEach(styleDiv => {
+          const styleId = styleDiv.querySelector('input[name="styleId"]').value.trim();
+          if (!styleId) {
+            valid = false;
+          }
+          const productDivs = styleDiv.querySelectorAll('.product');
+          if (productDivs.length === 0) {
+            valid = false;
+          }
+          const products = [];
+          productDivs.forEach(productDiv => {
+            const productCode = productDiv.querySelector('input[name="productCode"]').value.trim();
+            const materialName = productDiv.querySelector('input[name="materialName"]').value.trim();
+            const quantity = productDiv.querySelector('input[name="quantity"]').value.trim();
+            const uom = productDiv.querySelector('input[name="uom"]').value.trim();
+            if (!productCode || !materialName || !quantity || !uom) {
+              valid = false;
+            }
+            products.push({productCode, materialName, quantity, uom});
+          });
+          styles.push({styleId, products});
+        });
+
+        if (!valid) {
+          alert('Please fill in all required fields in styles and products.');
+          return;
+        }
+
+        const remarks = form.remarks.value.trim();
+
+        google.script.run
+          .withSuccessHandler(function(response) {
+            if(response.status === 'success') {
+              alert(response.message);
+              form.reset();
+              // Reset styles to initial state
+              const stylesContainer = document.getElementById('stylesContainer');
+              stylesContainer.innerHTML = `
+                <h3>Styles</h3>
+                <div class="style">
+                  <div class="style-header" onclick="toggleSection(this)">
+                    <h4>Style 1</h4>
+                    <button type="button" class="remove-style remove-btn" onclick="removeStyle(this)">Remove</button>
+                  </div>
+                  <div class="content" style="display: none;">
+                    <label><strong>Style ID:</strong></label>
+                    <input type="text" name="styleId" required>
+                    
+                    <div class="productsContainer">
+                      <h5>Products</h5>
+                      <div class="product">
+                        <div class="product-fields">
+                          <div class="field">
+                            <label><strong>Product Code:</strong></label>
+                            <input type="text" name="productCode" required>
+                          </div>
+                          <div class="field">
+                            <label><strong>Quantity:</strong></label>
+                            <input type="number" name="quantity" required min="1">
+                          </div>
+                          <div class="field">
+                            <label><strong>UOM:</strong></label>
+                            <input type="text" name="uom" required>
+                          </div>
+                        </div>
+                        <div class="full-width">
+                          <label><strong>Material Name:</strong></label>
+                          <input type="text" name="materialName" required>
+                        </div>
+                        <button type="button" class="remove-product remove-btn" onclick="removeProduct(this)">Remove Product</button>
+                      </div>
+                    </div>
+                    <button type="button" class="add-btn" onclick="addProduct(this)">Add Product</button>
+                  </div>
+                </div>
+              `;
+              styleCount = 1;
+            } else {
+              alert(response.message);
+            }
+          })
+          .withFailureHandler(function(error) {
+            alert('Submission failed: ' + error.message);
+          })
+          .submitIndent({
+            poDate,
+            poNumber,
+            client,
+            supplier,
+            remarks,
+            styles: JSON.stringify(styles)
+          });
+      });
+    </script>
+  </body>
+</html>
