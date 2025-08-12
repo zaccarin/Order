@@ -1,0 +1,99 @@
+const folderId = '1ioy_uWVdBG8DP7jKF1krKe_HyORvbXVdf9xDVtggDyp9qxFCeOQWQX8yv2SrSO-PVTByFXPI';  // Google Drive Folder ID for photo uploads
+const indentSheetName = "Indent Details";
+const formResponseSheetName = "Form Responses 1";  // Default Form Response Sheet Name
+
+function doGet() {
+  return HtmlService.createHtmlOutputFromFile('Index');
+}
+
+// Process multiple product rows with the same PO
+function submitIndent(form) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(indentSheetName);
+
+  const styleId = form.styleId;
+  const client = form.client;
+  const poNumber = form.poNumber;
+  const poDate = form.poDate;
+  const photoUrl = form.photoUrl || fetchLatestPhoto(poNumber);  // Fetch the latest photo for the PO
+  const indents = form.indents;
+
+  indents.forEach(item => {
+    sheet.appendRow([
+      styleId,
+      client,
+      poNumber,
+      poDate,
+      item.productCode,
+      item.materialName,
+      item.supplier,
+      item.quantity,
+      item.uom,
+      item.remarks,
+      photoUrl
+    ]);
+  });
+
+  return `PO ${poNumber} submitted with ${indents.length} items.`;
+}
+
+// Fetch the latest uploaded photo URL from Google Drive for a specific PO
+function fetchLatestPhoto(poNumber) {
+  const folder = DriveApp.getFolderById(folderId);
+  const files = folder.getFiles();
+  let latestFile;
+
+  while (files.hasNext()) {
+    let file = files.next();
+    if (!latestFile || file.getDateCreated() > latestFile.getDateCreated()) {
+      latestFile = file;
+    }
+  }
+
+  if (latestFile) {
+    return latestFile.getUrl();
+  } else {
+    Logger.log(`No photo uploaded for PO ${poNumber}.`);
+    return "No photo uploaded.";
+  }
+}
+
+// Sync photo URLs from Google Form responses to the Indent Details sheet
+function syncPhotoToIndent() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const indentSheet = ss.getSheetByName(indentSheetName);
+  const formResponseSheet = ss.getSheetByName(formResponseSheetName);
+
+  const formData = formResponseSheet.getDataRange().getValues();
+  const indentData = indentSheet.getDataRange().getValues();
+
+  const indentHeaders = indentData[0];
+  const formHeaders = formData[0];
+
+  const poIndex = indentHeaders.indexOf("PO Number");
+  const photoIndex = indentHeaders.indexOf("Photo");
+  const formPoIndex = formHeaders.indexOf("PO Number");
+  const fileUrlIndex = formHeaders.indexOf("File Upload");  // Match the file upload column name in Form Responses
+
+  if (poIndex === -1 || photoIndex === -1 || formPoIndex === -1 || fileUrlIndex === -1) {
+    Logger.log("Required columns not found.");
+    return;
+  }
+
+  // Iterate through form responses
+  for (let i = 1; i < formData.length; i++) {
+    const formPoNumber = formData[i][formPoIndex];
+    const uploadedPhotoUrl = formData[i][fileUrlIndex];
+
+    // Find matching PO in the indent details
+    for (let j = 1; j < indentData.length; j++) {
+      const indentPoNumber = indentData[j][poIndex];
+
+      if (formPoNumber === indentPoNumber && !indentData[j][photoIndex]) {
+        indentSheet.getRange(j + 1, photoIndex + 1).setValue(uploadedPhotoUrl);
+        Logger.log(`Photo for PO ${formPoNumber} added to indent sheet.`);
+        break;
+      }
+    }
+  }
+}

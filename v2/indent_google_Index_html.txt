@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>PO and Product Entry Form</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 40px;
+    }
+    form {
+      max-width: 900px;
+      margin: auto;
+      padding: 20px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    }
+    table {
+      width: 100%;
+      margin-bottom: 20px;
+      border-collapse: collapse;
+    }
+    th, td {
+      padding: 10px;
+      border: 1px solid #ddd;
+      text-align: center;
+    }
+    input, select {
+      width: 95%;
+      padding: 5px;
+    }
+    .remove {
+      background-color: red;
+      color: white;
+      border: none;
+      padding: 5px 10px;
+      cursor: pointer;
+      border-radius: 4px;
+    }
+    .add {
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      padding: 10px 15px;
+      cursor: pointer;
+      border-radius: 4px;
+    }
+    #response {
+      margin-top: 20px;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <h1>PO and Product Entry Form</h1>
+  <form id="poForm">
+    <label for="styleId">Style ID:</label>
+    <input type="text" id="styleId" name="styleId" required>
+
+    <label for="client">Client:</label>
+    <input type="text" id="client" name="client" required>
+
+    <label for="poNumber">PO_Number:</label>
+    <input type="text" id="poNumber" name="poNumber" required>
+
+    <label for="poDate">PO_Date:</label>
+    <input type="date" id="poDate" name="poDate" required>
+
+    <h3>Product Items:</h3>
+    <table id="indentTable">
+      <thead>
+        <tr>
+          <th>Product Code</th>
+          <th>Material Name</th>
+          <th>Supplier</th>
+          <th>Quantity</th>
+          <th>UOM</th>
+          <th>Remarks</th>
+          <th>Photo (via Google Form)</th>
+          <th>Remove</th>
+        </tr>
+      </thead>
+      <tbody id="indentContainer">
+        <tr>
+          <td><input type="text" name="productCode" required></td>
+          <td><input type="text" name="materialName" required></td>
+          <td><input type="text" name="supplier" required></td>
+          <td><input type="number" name="quantity" required></td>
+          <td><input type="text" name="uom" required></td>
+          <td><input type="text" name="remarks"></td>
+          <td>
+            <a href="https://docs.google.com/forms/d/e/1FAIpQLScKuuw4Q_KiEH_WDe8a9y-kc9WPccT_3H-4tPawGWLrZBKGHw/viewform" target="_blank">
+              Upload Photo
+            </a>
+          </td>
+          <td><button type="button" class="remove" onclick="removeRow(this)">X</button></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <button type="button" class="add" onclick="addRow()">+ Add Another Item</button><br><br>
+    <button type="button" onclick="submitForm()">Submit PO & Products</button>
+    <div id="response"></div>
+  </form>
+
+  <script>
+    // Add new product row
+    function addRow() {
+      const table = document.getElementById("indentContainer");
+      const newRow = table.insertRow();
+      newRow.innerHTML = `
+        <td><input type="text" name="productCode" required></td>
+        <td><input type="text" name="materialName" required></td>
+        <td><input type="text" name="supplier" required></td>
+        <td><input type="number" name="quantity" required></td>
+        <td><input type="text" name="uom" required></td>
+        <td><input type="text" name="remarks"></td>
+        <td>
+          <a href="https://docs.google.com/forms/d/e/1FAIpQLScKuuw4Q_KiEH_WDe8a9y-kc9WPccT_3H-4tPawGWLrZBKGHw/viewform" target="_blank">
+            Upload Photo
+          </a>
+        </td>
+        <td><button type="button" class="remove" onclick="removeRow(this)">X</button></td>
+      `;
+    }
+
+    // Remove a row
+    function removeRow(button) {
+      button.closest("tr").remove();
+    }
+
+    // Submit form data to Apps Script
+    function submitForm() {
+      const form = document.getElementById("poForm");
+      const formData = new FormData(form);
+
+      const indents = [];
+      document.querySelectorAll("#indentContainer tr").forEach(row => {
+        const indent = {
+          productCode: row.querySelector("[name='productCode']").value,
+          materialName: row.querySelector("[name='materialName']").value,
+          supplier: row.querySelector("[name='supplier']").value,
+          quantity: row.querySelector("[name='quantity']").value,
+          uom: row.querySelector("[name='uom']").value,
+          remarks: row.querySelector("[name='remarks']").value
+        };
+        indents.push(indent);
+      });
+
+      const data = {
+        styleId: formData.get('styleId'),
+        client: formData.get('client'),
+        poNumber: formData.get('poNumber'),
+        poDate: formData.get('poDate'),
+        indents: indents
+      };
+
+      google.script.run.withSuccessHandler(response => {
+        document.getElementById("response").innerText = response;
+        form.reset();
+        document.getElementById("indentContainer").innerHTML = '';
+        addRow();
+      }).withFailureHandler(error => {
+        document.getElementById("response").innerText = "Error: " + error.message;
+      }).submitIndent(data);
+    }
+  </script>
+</body>
+</html>
