@@ -1,389 +1,170 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <base target="_top">
+  <meta charset="UTF-8">
+  <title>PO and Product Entry Form</title>
   <style>
-    /* --- existing styles unchanged (copy from previous version) --- */
-    body{font-family:Arial,Helvetica,sans-serif;background:#f9f9f9;margin:0;padding:0;}
-    .container{max-width:1400px;margin:20px auto;background:#fff;padding:20px;border-radius:8px;
-               box-shadow:0 2px 8px rgba(0,0,0,.1);}
-    h2{text-align:center;margin-bottom:20px;}
-    /* === Header grid – wider inputs ==================================== */
-.header-grid{
-  display:grid; grid-gap:10px; align-items:center; margin-bottom:24px;
-
-  /* label | input … */
-      grid-template-columns:60px minmax(100px,1fr) 80px minmax(160px,1fr)
-                           50px  minmax(200px,1fr)  60px  minmax(300px,1fr)
-                           60px  minmax(160px,2fr);
-}
-.header-grid label{font-weight:bold;}
-.header-grid input,
-.header-grid textarea{width:100%;padding:8px 10px;font-size:15px;box-sizing:border-box;}
-/* === Style-detail table ==================================== */
-.style-table{width:100%;border-collapse:collapse;table-layout:auto;}
-.style-table th,.style-table td{border:1px solid #ccc;padding:6px;}
-.style-table th{background:#eef;text-align:left;font-weight:600;}
-
-/*  % widths add up to 98 → leaves 2 % slack for borders / padding   */
-.style-table col:nth-child(1){width:17%}   /* Style ID   */
-.style-table col:nth-child(2){width:25%}   /* SKU        */
-.style-table col:nth-child(3){width:40%}   /* Material   */
-.style-table col:nth-child(4){width:5%}    /* Qty        */
-.style-table col:nth-child(5){width:5%}    /* UOM        */
-.style-table col:nth-child(6){width:5%}    /* Remove btn */
-
-/* let inputs shrink instead of forcing overflow */
-.style-table input{width:100%;min-width:0;box-sizing:border-box;}
-
-/* === Buttons and actions =========================================== */
-.actions{display:flex;gap:12px;flex-wrap:wrap;margin-top:14px;}
-.btn{border:none;border-radius:4px;cursor:pointer;padding:9px 14px;font-size:14px;}
-
-    .btn-add{background:#2ecc71;color:#fff;}
-    .btn-remove{background:#e74c3c;color:#fff;}
-    .btn-submit{background:#3498db;color:#fff;width:100%;padding:12px;font-size:16px;}
-    .relative-input{position:relative;}
-    .autocomplete-suggestions{
-      position:absolute;top:100%;left:0;right:0;z-index:1000;
-      background:#fff;border:1px solid #ced4da;border-radius:4px;
-      max-height:190px;overflow-y:auto;box-shadow:0 2px 6px rgba(0,0,0,.1);}
-    .autocomplete-suggestion{padding:6px 10px;cursor:pointer;display:flex;align-items:center;
-                              border-bottom:1px solid #e9ecef;}
-    .autocomplete-suggestion:last-child{border-bottom:none;}
-    .autocomplete-suggestion:hover{background:#f1f3f5;}
-    .autocomplete-suggestion img{width:40px;height:40px;border-radius:4px;object-fit:cover;margin-right:8px;}
-    .autocomplete-suggestion.error{color:#c00;display:block;}
+    body {
+      font-family: Arial, sans-serif;
+      margin: 40px;
+    }
+    form {
+      max-width: 900px;
+      margin: auto;
+      padding: 20px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    }
+    table {
+      width: 100%;
+      margin-bottom: 20px;
+      border-collapse: collapse;
+    }
+    th, td {
+      padding: 10px;
+      border: 1px solid #ddd;
+      text-align: center;
+    }
+    input, select {
+      width: 95%;
+      padding: 5px;
+    }
+    .remove {
+      background-color: red;
+      color: white;
+      border: none;
+      padding: 5px 10px;
+      cursor: pointer;
+      border-radius: 4px;
+    }
+    .add {
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      padding: 10px 15px;
+      cursor: pointer;
+      border-radius: 4px;
+    }
+    #response {
+      margin-top: 20px;
+      font-weight: bold;
+    }
   </style>
 </head>
 <body>
-  <div class="container">
-    <h2>Purchase Order Submission</h2>
-    <form id="poForm">
+  <h1>PO and Product Entry Form</h1>
+  <form id="poForm">
+    <label for="styleId">Style ID:</label>
+    <input type="text" id="styleId" name="styleId" required>
 
-      <!-- === Header === -->
-      <div class="header-grid">
-        <label for="poNumber">PO Number</label>
-        <input type="text" id="poNumber" name="poNumber" required placeholder="FTPL/0002">
+    <label for="client">Client:</label>
+    <input type="text" id="client" name="client" required>
 
-        <label for="poDate">PO Date</label>
-<input type="date" id="poDate" name="poDate" required>
+    <label for="poNumber">PO_Number:</label>
+    <input type="text" id="poNumber" name="poNumber" required>
 
+    <label for="poDate">PO_Date:</label>
+    <input type="date" id="poDate" name="poDate" required>
 
-        <label for="clientBox">Client</label>
-        <div class="relative-input">
-          <input type="text" id="clientBox" name="client" placeholder="Type client…" required autocomplete="off">
-          <div id="clientSuggestions" class="autocomplete-suggestions"></div>
-        </div>
+    <h3>Product Items:</h3>
+    <table id="indentTable">
+      <thead>
+        <tr>
+          <th>Product Code</th>
+          <th>Material Name</th>
+          <th>Supplier</th>
+          <th>Quantity</th>
+          <th>UOM</th>
+          <th>Remarks</th>
+          <th>Photo (via Google Form)</th>
+          <th>Remove</th>
+        </tr>
+      </thead>
+      <tbody id="indentContainer">
+        <tr>
+          <td><input type="text" name="productCode" required></td>
+          <td><input type="text" name="materialName" required></td>
+          <td><input type="text" name="supplier" required></td>
+          <td><input type="number" name="quantity" required></td>
+          <td><input type="text" name="uom" required></td>
+          <td><input type="text" name="remarks"></td>
+          <td>
+            <a href="https://docs.google.com/forms/d/e/1FAIpQLScKuuw4Q_KiEH_WDe8a9y-kc9WPccT_3H-4tPawGWLrZBKGHw/viewform" target="_blank">
+              Upload Photo
+            </a>
+          </td>
+          <td><button type="button" class="remove" onclick="removeRow(this)">X</button></td>
+        </tr>
+      </tbody>
+    </table>
 
-        <label for="supplier">Supplier</label>
-        <input type="text" id="supplier" name="supplier" required>
-
-        <label for="targetDate">Target Date</label>
-<input type="date" id="targetDate" name="targetDate" required>
-
-
-      </div>
-
-      <!-- === Styles container === -->
-      <div id="stylesContainer">
-        <div class="style-block">
-          <table class="style-table">
-            <colgroup><col/><col/><col/><col/><col/><col/></colgroup>
-            <thead>
-              <tr><th>Style ID</th><th>SKU&nbsp;Code</th><th>Material Name</th>
-                  <th>Quantity</th><th>UOM</th><th>Remove</th></tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td>
-                  <div class="relative-input">
-                    <input type="text" class="styleIdInput" name="styleId"
-                           placeholder="Type style ID…" required autocomplete="off">
-                    <div class="autocomplete-suggestions styleSuggestions"></div>
-                  </div>
-                </td>
-
-                <td>
-                  <div class="relative-input">
-                    <input type="text" class="skuInput" name="productCode"
-                           placeholder="SKU…" required autocomplete="off">
-                    <div class="autocomplete-suggestions skuSuggestions"></div>
-                  </div>
-                </td>
-
-                <td>
-                  <div class="relative-input">
-                    <input type="text" class="itemInput" name="materialName"
-                           placeholder="Material…" required autocomplete="off">
-                    <div class="autocomplete-suggestions itemSuggestions"></div>
-                  </div>
-                </td>
-
-                <td><input type="number" name="quantity" min="1" required></td>
-                <td><input type="text"   name="uom" class="uomField"></td>
-                <td><button type="button" class="btn btn-remove"
-                            onclick="removeProduct(this)">Remove</button></td>
-              </tr>
-            </tbody>
-          </table>
-          <div class="actions">
-            <button type="button" class="btn btn-add" onclick="addProduct(this)">Add Product</button>
-            <button type="button" class="btn btn-remove" onclick="removeStyle(this)">Remove Style</button>
-          </div>
-        </div>
-      </div>
-
-      <!-- === Form-wide buttons === -->
-      <div class="actions">
-        <button type="button" class="btn btn-add" onclick="addStyle()">Add Style</button>
-        <button type="button" class="btn btn-add" onclick="saveForm()">Save Temporarily</button>
-      </div>
-      <div class="actions" style="margin-top:20px;">
-        <button type="submit" class="btn btn-submit">Submit PO</button>
-        <button type="button" class="btn btn-add" onclick="openGoogleForm()">Upload Photo</button>
-      </div>
-
-    </form>
-  </div>
+    <button type="button" class="add" onclick="addRow()">+ Add Another Item</button><br><br>
+    <button type="button" onclick="submitForm()">Submit PO & Products</button>
+    <div id="response"></div>
+  </form>
 
   <script>
-    function suppressNextInput(el){ el.dataset.skipNext = '1'; }
-
-    /* ---------------- shared helpers ---------------- */
-    function debounce(fn,ms=300){let t;return(...a)=>{clearTimeout(t);t=setTimeout(()=>fn(...a),ms);};}
-    function clearNode(n){while(n.firstChild)n.removeChild(n.firstChild);}
-    const ALWAYS = ['reliance','first cry','threads'];
-
-    /* ---------------- global state ------------------ */
-    let masterItems=[];     // full MasterItems cache
-    const clientInput = document.getElementById('clientBox');
-    const clientSug   = document.getElementById('clientSuggestions');
-
-    /* ---------------- on load ----------------------- */
-    window.addEventListener('load',()=>{
-      google.script.run.withSuccessHandler(fillFromTemp).getLatestTempForm();
-      google.script.run.withSuccessHandler(data=>{masterItems=data;}).getMasterItems();
-    });
-
-    /* ---------------- draft restore ---------------- */
-   function fillFromTemp(d){
-  if (!d) return;
-  const f = document.forms['poForm'];
-  f.poNumber.value  = d.poNumber   || '';
-  f.poDate.value    = d.poDate     || '';
-  f.client.value    = d.client     || '';
-  f.supplier.value  = d.supplier   || '';
-  f.targetDate.value= d.targetDate || '';   // ← new field
-  if (d.styles) rebuildStyles(JSON.parse(d.styles));
-}
-
-
-    /* ---------------- client autocomplete ----------- */
-    clientInput.addEventListener('input',debounce(()=>{
-      const q=clientInput.value.trim(); clearNode(clientSug);
-      if(!q) return;
-      if (clientInput.dataset.skipNext){
-  delete clientInput.dataset.skipNext;
-  return;                            // skip one automatic pass
-}
-      google.script.run.withSuccessHandler(list=>{
-        if(!list.length){clientSug.innerHTML='<div class="autocomplete-suggestion">No matches</div>';return;}
-        list.forEach(c=>{
-          const d=document.createElement('div');
-          d.className='autocomplete-suggestion'; d.textContent=c;
-          d.onclick=()=>{clientInput.value=c;suppressNextInput(clientInput);clearNode(clientSug);resetAllMaterialFields();};
-          clientSug.appendChild(d);
-        });
-      }).getClients(q);
-    },300));
-
-    function resetAllMaterialFields(){
-      document.querySelectorAll('.skuInput,.itemInput').forEach(i=>{i.value='';});
-      document.querySelectorAll('.uomField').forEach(i=>{i.value='';});
-      document.querySelectorAll('.skuSuggestions,.itemSuggestions').forEach(clearNode);
+    // Add new product row
+    function addRow() {
+      const table = document.getElementById("indentContainer");
+      const newRow = table.insertRow();
+      newRow.innerHTML = `
+        <td><input type="text" name="productCode" required></td>
+        <td><input type="text" name="materialName" required></td>
+        <td><input type="text" name="supplier" required></td>
+        <td><input type="number" name="quantity" required></td>
+        <td><input type="text" name="uom" required></td>
+        <td><input type="text" name="remarks"></td>
+        <td>
+          <a href="https://docs.google.com/forms/d/e/1FAIpQLScKuuw4Q_KiEH_WDe8a9y-kc9WPccT_3H-4tPawGWLrZBKGHw/viewform" target="_blank">
+            Upload Photo
+          </a>
+        </td>
+        <td><button type="button" class="remove" onclick="removeRow(this)">X</button></td>
+      `;
     }
 
-    /* ===================================================================
-     *  Event-delegated autocomplete for:
-     *    .skuInput      (SKU Code)
-     *    .itemInput     (Material Name)
-     * =================================================================== */
+    // Remove a row
+    function removeRow(button) {
+      button.closest("tr").remove();
+    }
 
-    document.addEventListener('input',debounce(function(e){
-      if(!(e.target.classList.contains('skuInput')||e.target.classList.contains('itemInput'))) return;
+    // Submit form data to Apps Script
+    function submitForm() {
+      const form = document.getElementById("poForm");
+      const formData = new FormData(form);
 
-      const inp  = e.target;
-      const box  = inp.nextElementSibling;
-      clearNode(box);
-
-      const q        = inp.value.trim().toLowerCase();
-      const client   = clientInput.value.trim().toLowerCase();
-      if(!q) return;
-
-      const bySku    = inp.classList.contains('skuInput');
-      const matches  = masterItems.filter(it=>{
-        const itClient=(it['Client']||'').toLowerCase();
-        if(client && itClient!==client && !ALWAYS.includes(itClient)) return false;
-        const target = bySku ? (it['SKU Code']||'') : (it['Item']||'');
-        return target.toLowerCase().includes(q);
-      }).slice(0,10);
-
-      if(!matches.length){box.innerHTML='<div class="autocomplete-suggestion">No matches</div>';return;}
-        
-      if (inp.dataset.skipNext){
-        delete inp.dataset.skipNext;          // ignore once, then resume normal
-        return;
-        }
-      matches.forEach(it=>{
-        const d=document.createElement('div'); d.className='autocomplete-suggestion';
-        if(it['Image URL']){
-          const img=document.createElement('img'); img.src=it['Image URL']; d.appendChild(img);
-        }
-        const span=document.createElement('span');
-        span.textContent = bySku ? `${it['SKU Code']}  –  ${it['Item']}` : `${it['Item']}  –  ${it['SKU Code']}`;
-        d.appendChild(span);
-
-        d.onclick=()=>applyItemSelection(inp,it);
-        box.appendChild(d);
+      const indents = [];
+      document.querySelectorAll("#indentContainer tr").forEach(row => {
+        const indent = {
+          productCode: row.querySelector("[name='productCode']").value,
+          materialName: row.querySelector("[name='materialName']").value,
+          supplier: row.querySelector("[name='supplier']").value,
+          quantity: row.querySelector("[name='quantity']").value,
+          uom: row.querySelector("[name='uom']").value,
+          remarks: row.querySelector("[name='remarks']").value
+        };
+        indents.push(indent);
       });
-    },300));
 
-    function applyItemSelection(field,item){
-  const row  = field.closest('tr');
-  const skuI = row.querySelector('.skuInput');
-  const itmI = row.querySelector('.itemInput');
-  const uomF = row.querySelector('.uomField');
+      const data = {
+        styleId: formData.get('styleId'),
+        client: formData.get('client'),
+        poNumber: formData.get('poNumber'),
+        poDate: formData.get('poDate'),
+        indents: indents
+      };
 
-  if(skuI){ skuI.value = item['SKU Code'] || ''; suppressNextInput(skuI); }
-  if(itmI){ itmI.value = item['Item']     || ''; suppressNextInput(itmI); }
-  if(uomF) uomF.value = item['UOM']       || '';
-
-  row.querySelectorAll('.autocomplete-suggestions').forEach(b=>b.innerHTML='');
-}
-
-
-    /* ---------------- Style-ID autocomplete (unchanged) -------------- */
-    document.addEventListener('input',debounce(function(evt){
-      if(!evt.target.classList.contains('styleIdInput')) return;
-      const inp=evt.target, sug=inp.parentElement.querySelector('.styleSuggestions');
-      clearNode(sug);
-      const client=clientInput.value.trim(); const q=inp.value.trim();
-      if(!client){sug.innerHTML='<div class="autocomplete-suggestion">Select client first</div>';return;}
-      if(!q) return;
-      if (inp.dataset.skipNext){
-        delete inp.dataset.skipNext;          // ignore once, then resume normal
-       return;
-        }
-      google.script.run.withSuccessHandler(ids=>{
-        if(!ids.length){sug.innerHTML='<div class="autocomplete-suggestion">No matches</div>';return;}
-        ids.forEach(id=>{
-          const d=document.createElement('div');d.className='autocomplete-suggestion';d.textContent=id;
-          d.onclick=()=>{inp.value=id; suppressNextInput(inp);   clearNode(sug);};
-          sug.appendChild(d);
-        });
-      }).withFailureHandler(err=>{sug.innerHTML=`<div class="autocomplete-suggestion error">${err.message}</div>`;})
-        .getStyleIDs(client,q);
-    },300));
-
-    /* ---------------- add / remove rows ---------------- */
-    function addStyle(){
-      const first=document.querySelector('.style-block');
-      const clone=first.cloneNode(true);
-      clone.querySelectorAll('input').forEach(i=>i.value='');
-      clone.querySelectorAll('.autocomplete-suggestions').forEach(clearNode);
-      document.getElementById('stylesContainer').appendChild(clone);
+      google.script.run.withSuccessHandler(response => {
+        document.getElementById("response").innerText = response;
+        form.reset();
+        document.getElementById("indentContainer").innerHTML = '';
+        addRow();
+      }).withFailureHandler(error => {
+        document.getElementById("response").innerText = "Error: " + error.message;
+      }).submitIndent(data);
     }
-    function removeStyle(btn){
-      const blocks=document.querySelectorAll('.style-block');
-      if(blocks.length>1) btn.closest('.style-block').remove();
-      else alert('At least one style must remain');
-    }
-    function addProduct(btn){
-      const row=btn.closest('.style-block').querySelector('tbody tr');
-      const clone=row.cloneNode(true);
-      clone.querySelectorAll('input').forEach(i=>i.value='');
-      clone.querySelectorAll('.autocomplete-suggestions').forEach(clearNode);
-      row.parentElement.appendChild(clone);
-    }
-    function removeProduct(btn){
-      const rows=btn.closest('tbody').querySelectorAll('tr');
-      if(rows.length>1) btn.closest('tr').remove();
-    }
-
-    /* ---------------- temp-save ---------------- */
-function saveForm() {
-  const fd = new FormData(document.forms['poForm']);
-
-  const draft = {
-    poNumber   : fd.get('poNumber'),
-    poDate     : fd.get('poDate'),
-    client     : fd.get('client'),
-    supplier   : fd.get('supplier'),
-    targetDate : fd.get('targetDate')           // required, so no fallback
-  };
-
-  /* collect style blocks */
-  const styles = [];
-  document.querySelectorAll('.style-block').forEach(block => {
-    const sid   = block.querySelector('.styleIdInput').value.trim();
-    const prods = Array.from(block.querySelectorAll('tbody tr')).map(tr => ({
-      productCode  : tr.querySelector('.skuInput').value.trim(),
-      materialName : tr.querySelector('.itemInput').value.trim(),
-      quantity     : tr.querySelector('[name="quantity"]').value.trim(),
-      uom          : tr.querySelector('.uomField').value.trim()
-    }));
-    styles.push({ styleId: sid, products: prods });
-  });
-  draft.styles = JSON.stringify(styles);
-
-  google.script.run
-    .withSuccessHandler(msg => alert(msg))
-    .saveTempForm(draft);
-}
-
-
-
-/* ---------- submit Purchase-Order -------------------------------- */
-document.getElementById('poForm').addEventListener('submit', e => {
-  e.preventDefault();                       // stop native submit
-
-  const fd = new FormData(e.target);
-
-  const payload = {
-    poNumber   : fd.get('poNumber'),
-    poDate     : fd.get('poDate'),
-    client     : fd.get('client'),
-    supplier   : fd.get('supplier'),
-    targetDate : fd.get('targetDate')
-  };
-
-  /* collect style blocks */
-  const styles = [];
-  document.querySelectorAll('.style-block').forEach(block => {
-    const sid   = block.querySelector('.styleIdInput').value.trim();
-    const prods = Array.from(block.querySelectorAll('tbody tr')).map(tr => ({
-      productCode  : tr.querySelector('.skuInput').value.trim(),
-      materialName : tr.querySelector('.itemInput').value.trim(),
-      quantity     : tr.querySelector('[name="quantity"]').value.trim(),
-      uom          : tr.querySelector('.uomField').value.trim()
-    }));
-    styles.push({ styleId: sid, products: prods });
-  });
-  payload.styles = JSON.stringify(styles);
-
-  google.script.run
-    .withSuccessHandler(res => {
-      alert(res.message);
-      if (res.status === 'success') e.target.reset();
-    })
-    .withFailureHandler(err => alert(`Error: ${err.message}`))
-    .submitIndent(payload);
-});
-
-
-    /* ---------------- misc helpers ------------------- */
-    function openGoogleForm(){window.open('https://docs.google.com/forms/d/e/1FAIpQLSc7Yx1XxeADqAYZbDR3jFLxiU52gd2N7cBxEWxGh0yKyWfgdg/viewform','_blank');}
   </script>
 </body>
 </html>
