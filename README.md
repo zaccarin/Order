@@ -1,4 +1,3 @@
-Here’s a clean, GitHub‑ready **README.md** you can drop into the repo for your current Purchase‑Order web app. It matches the exact code you last shared (PO‑photo check, PO Date saved as date‑only, Target Date present, and duplicate guard on **PO + Style + SKU + Material**, no cache).
 
 ---
 
@@ -291,19 +290,3 @@ Keep the deployment access aligned with your organization’s policy.
 
 ---
 
-## Roadmap (optional)
-
-* Role‑based access (view/submit per team)
-* Server‑side SKU search with pagination
-* Attachment upload to Drive + link in `Indent Details`
-* Structured error objects with PO Number for better summaries
-
----
-
-## License
-
-Internal use. © Your Organization.
-
----
-
-If you want this saved as a real `README.md` file with a minimal folder tree and sample screenshots placeholders, say the word and I’ll generate the file(s) for download.
